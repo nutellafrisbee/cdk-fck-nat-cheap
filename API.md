@@ -29,7 +29,10 @@ const fckNatInstanceProps: FckNatInstanceProps = { ... }
 | <code><a href="#cdk-fck-nat.FckNatInstanceProps.property.keyPair">keyPair</a></code> | <code>aws-cdk-lib.aws_ec2.IKeyPair</code> | SSH keypair to attach to instances. |
 | <code><a href="#cdk-fck-nat.FckNatInstanceProps.property.machineImage">machineImage</a></code> | <code>aws-cdk-lib.aws_ec2.IMachineImage</code> | The machine image (AMI) to use. |
 | <code><a href="#cdk-fck-nat.FckNatInstanceProps.property.securityGroup">securityGroup</a></code> | <code>aws-cdk-lib.aws_ec2.ISecurityGroup</code> | Security Group for fck-nat instances. |
+| <code><a href="#cdk-fck-nat.FckNatInstanceProps.property.spotAllocationStrategy">spotAllocationStrategy</a></code> | <code>string</code> | Spot allocation strategy to use when launching spot instances. |
+| <code><a href="#cdk-fck-nat.FckNatInstanceProps.property.spotMaxPrice">spotMaxPrice</a></code> | <code>string</code> | Maximum price per hour you're willing to pay for spot instances (in USD). |
 | <code><a href="#cdk-fck-nat.FckNatInstanceProps.property.userData">userData</a></code> | <code>string[]</code> | Optionally add commands to the user data of the instance. |
+| <code><a href="#cdk-fck-nat.FckNatInstanceProps.property.useSpotInstances">useSpotInstances</a></code> | <code>boolean</code> | Use Spot instances instead of on-demand instances for significant cost savings. |
 
 ---
 
@@ -195,6 +198,42 @@ Security Group for fck-nat instances.
 
 ---
 
+##### `spotAllocationStrategy`<sup>Optional</sup> <a name="spotAllocationStrategy" id="cdk-fck-nat.FckNatInstanceProps.property.spotAllocationStrategy"></a>
+
+```typescript
+public readonly spotAllocationStrategy: string;
+```
+
+- *Type:* string
+- *Default:* 'capacity-optimized' - Best for availability and cost balance
+
+Spot allocation strategy to use when launching spot instances.
+
+'lowest-price': Launch instances from the lowest priced pool
+- 'capacity-optimized': Launch instances from pools with optimal capacity for the number of instances launching
+- 'capacity-optimized-prioritized': Launch instances from pools with optimal capacity, using instance type priority
+
+Only applies when useSpotInstances is true.
+
+---
+
+##### `spotMaxPrice`<sup>Optional</sup> <a name="spotMaxPrice" id="cdk-fck-nat.FckNatInstanceProps.property.spotMaxPrice"></a>
+
+```typescript
+public readonly spotMaxPrice: string;
+```
+
+- *Type:* string
+- *Default:* On-demand price
+
+Maximum price per hour you're willing to pay for spot instances (in USD).
+
+If not specified, the on-demand price is used as the maximum.
+
+Only applies when useSpotInstances is true.
+
+---
+
 ##### `userData`<sup>Optional</sup> <a name="userData" id="cdk-fck-nat.FckNatInstanceProps.property.userData"></a>
 
 ```typescript
@@ -205,6 +244,75 @@ public readonly userData: string[];
 - *Default:* No additional user commands are added.
 
 Optionally add commands to the user data of the instance.
+
+---
+
+##### `useSpotInstances`<sup>Optional</sup> <a name="useSpotInstances" id="cdk-fck-nat.FckNatInstanceProps.property.useSpotInstances"></a>
+
+```typescript
+public readonly useSpotInstances: boolean;
+```
+
+- *Type:* boolean
+- *Default:* false - Use on-demand instances
+
+Use Spot instances instead of on-demand instances for significant cost savings.
+
+Spot instances can be interrupted by AWS when capacity is needed elsewhere.
+For NAT instances, this is generally acceptable as the ASG will launch a replacement.
+
+---
+
+### FckNatSpotInstanceAspectProps <a name="FckNatSpotInstanceAspectProps" id="cdk-fck-nat.FckNatSpotInstanceAspectProps"></a>
+
+Configuration options for the FckNatSpotInstanceAspect.
+
+#### Initializer <a name="Initializer" id="cdk-fck-nat.FckNatSpotInstanceAspectProps.Initializer"></a>
+
+```typescript
+import { FckNatSpotInstanceAspectProps } from 'cdk-fck-nat'
+
+const fckNatSpotInstanceAspectProps: FckNatSpotInstanceAspectProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#cdk-fck-nat.FckNatSpotInstanceAspectProps.property.spotAllocationStrategy">spotAllocationStrategy</a></code> | <code>string</code> | Spot allocation strategy to use when launching spot instances. |
+| <code><a href="#cdk-fck-nat.FckNatSpotInstanceAspectProps.property.spotMaxPrice">spotMaxPrice</a></code> | <code>string</code> | Maximum price per hour you're willing to pay for spot instances (in USD). |
+
+---
+
+##### `spotAllocationStrategy`<sup>Optional</sup> <a name="spotAllocationStrategy" id="cdk-fck-nat.FckNatSpotInstanceAspectProps.property.spotAllocationStrategy"></a>
+
+```typescript
+public readonly spotAllocationStrategy: string;
+```
+
+- *Type:* string
+- *Default:* 'capacity-optimized' - Best for availability and cost balance
+
+Spot allocation strategy to use when launching spot instances.
+
+'lowest-price': Launch instances from the lowest priced pool
+- 'capacity-optimized': Launch instances from pools with optimal capacity for the number of instances launching
+- 'capacity-optimized-prioritized': Launch instances from pools with optimal capacity, using instance type priority
+
+---
+
+##### `spotMaxPrice`<sup>Optional</sup> <a name="spotMaxPrice" id="cdk-fck-nat.FckNatSpotInstanceAspectProps.property.spotMaxPrice"></a>
+
+```typescript
+public readonly spotMaxPrice: string;
+```
+
+- *Type:* string
+- *Default:* On-demand price
+
+Maximum price per hour you're willing to pay for spot instances (in USD).
+
+If not specified, the on-demand price is used as the maximum.
 
 ---
 
@@ -453,5 +561,78 @@ public readonly DEFAULT_CLOUDWATCH_CONFIG: any;
 The default CloudWatch config used when additional CloudWatch metric reporting is enabled.
 
 ---
+
+### FckNatSpotInstanceAspect <a name="FckNatSpotInstanceAspect" id="cdk-fck-nat.FckNatSpotInstanceAspect"></a>
+
+- *Implements:* aws-cdk-lib.IAspect
+
+CDK Aspect that converts FckNat instances to use Spot instances for cost optimization.
+
+This aspect can be applied to a Stack, Construct, or the entire App to automatically
+convert all FckNat instances to use Spot pricing instead of On-Demand pricing.
+
+Example usage:
+```typescript
+import { FckNatSpotInstanceAspect } from 'cdk-fck-nat';
+import { Aspects } from 'aws-cdk-lib';
+
+const app = new cdk.App();
+const stack = new cdk.Stack(app, 'MyStack');
+
+// ... create VPC with FckNat provider ...
+
+// Apply spot instances to all FckNat instances in the stack
+Aspects.of(stack).add(new FckNatSpotInstanceAspect());
+```
+
+Spot instances provide significant cost savings (typically 50-90% off on-demand pricing)
+but can be interrupted by AWS when capacity is needed elsewhere. For NAT instances,
+this is generally acceptable as the Auto Scaling Group will automatically launch
+a replacement instance.
+
+#### Initializers <a name="Initializers" id="cdk-fck-nat.FckNatSpotInstanceAspect.Initializer"></a>
+
+```typescript
+import { FckNatSpotInstanceAspect } from 'cdk-fck-nat'
+
+new FckNatSpotInstanceAspect(props?: FckNatSpotInstanceAspectProps)
+```
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#cdk-fck-nat.FckNatSpotInstanceAspect.Initializer.parameter.props">props</a></code> | <code><a href="#cdk-fck-nat.FckNatSpotInstanceAspectProps">FckNatSpotInstanceAspectProps</a></code> | *No description.* |
+
+---
+
+##### `props`<sup>Optional</sup> <a name="props" id="cdk-fck-nat.FckNatSpotInstanceAspect.Initializer.parameter.props"></a>
+
+- *Type:* <a href="#cdk-fck-nat.FckNatSpotInstanceAspectProps">FckNatSpotInstanceAspectProps</a>
+
+---
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#cdk-fck-nat.FckNatSpotInstanceAspect.visit">visit</a></code> | All aspects can visit an IConstruct. |
+
+---
+
+##### `visit` <a name="visit" id="cdk-fck-nat.FckNatSpotInstanceAspect.visit"></a>
+
+```typescript
+public visit(node: IConstruct): void
+```
+
+All aspects can visit an IConstruct.
+
+###### `node`<sup>Required</sup> <a name="node" id="cdk-fck-nat.FckNatSpotInstanceAspect.visit.parameter.node"></a>
+
+- *Type:* constructs.IConstruct
+
+---
+
+
+
 
 

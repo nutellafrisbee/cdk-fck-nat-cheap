@@ -27,6 +27,31 @@ export function getFckNatProviders (
   return images
 }
 
+export function getFckNatSpotProviders (
+  amiOwner: string,
+  instanceType: ec2.InstanceType,
+  names: string[]
+): FckNatInstanceProvider[] {
+  const images: FckNatInstanceProvider[] = []
+
+  for (const name of names) {
+    images.push(new FckNatInstanceProvider({
+      instanceType: instanceType,
+      machineImage: new ec2.LookupMachineImage({
+        name,
+        owners: [amiOwner]
+      }),
+      keyName: 'fck-nat-test',
+      enableCloudWatch: true,
+      enableSsm: true,
+      useSpotInstances: true,
+      spotAllocationStrategy: 'capacity-optimized',
+    }))
+  }
+
+  return images
+}
+
 export function getNatInstanceProviders(
   amiOwner: string,
   instanceType: ec2.InstanceType,
