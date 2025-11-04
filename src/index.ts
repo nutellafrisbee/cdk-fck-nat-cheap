@@ -7,6 +7,9 @@ import {
 
 import { DEFAULT_CLOUDWATCH_CONFIG } from './internal/default_cloudwatch_config';
 
+// Export aspects
+export { FckNatSpotInstanceAspect, FckNatSpotInstanceAspectProps } from './aspects/spot-instance-aspect';
+
 /**
  * Preferential set
  *
@@ -138,6 +141,37 @@ export interface FckNatInstanceProps {
    */
   readonly asgUpdatePolicy?: autoscaling.UpdatePolicy;
 
+  /**
+   * Use Spot instances instead of on-demand instances for significant cost savings.
+   * Spot instances can be interrupted by AWS when capacity is needed elsewhere.
+   * For NAT instances, this is generally acceptable as the ASG will launch a replacement.
+   *
+   * @default false - Use on-demand instances
+   */
+  readonly useSpotInstances?: boolean;
+
+  /**
+   * Maximum price per hour you're willing to pay for spot instances (in USD).
+   * If not specified, the on-demand price is used as the maximum.
+   *
+   * Only applies when useSpotInstances is true.
+   *
+   * @default - On-demand price
+   */
+  readonly spotMaxPrice?: string;
+
+  /**
+   * Spot allocation strategy to use when launching spot instances.
+   * - 'lowest-price': Launch instances from the lowest priced pool
+   * - 'capacity-optimized': Launch instances from pools with optimal capacity for the number of instances launching
+   * - 'capacity-optimized-prioritized': Launch instances from pools with optimal capacity, using instance type priority
+   *
+   * Only applies when useSpotInstances is true.
+   *
+   * @default 'capacity-optimized' - Best for availability and cost balance
+   */
+  readonly spotAllocationStrategy?: 'lowest-price' | 'capacity-optimized' | 'capacity-optimized-prioritized';
+
 }
 
 export class FckNatInstanceProvider extends ec2.NatProvider implements ec2.IConnectable {
@@ -255,6 +289,17 @@ export class FckNatInstanceProvider extends ec2.NatProvider implements ec2.IConn
       }
 
 
+      const launchTemplate = new ec2.LaunchTemplate(sub, 'FckNatLaunchTemplate', {
+        associatePublicIpAddress: true,
+        instanceType: this.props.instanceType,
+        machineImage,
+        securityGroup: this._securityGroup,
+        role: this._role,
+        userData: userData,
+        ... (this.props.keyName && { keyName: this.props.keyName }),
+        keyPair: this.props.keyPair,
+      });
+
       const autoScalingGroup = new autoscaling.AutoScalingGroup(
         sub, 'FckNatAsg', {
           vpc: options.vpc,
@@ -262,19 +307,39 @@ export class FckNatInstanceProvider extends ec2.NatProvider implements ec2.IConn
           minCapacity: 1,
           maxCapacity: 1,
           groupMetrics: [autoscaling.GroupMetrics.all()],
-          launchTemplate: new ec2.LaunchTemplate(sub, 'FckNatLaunchTemplate', {
-            associatePublicIpAddress: true,
-            instanceType: this.props.instanceType,
-            machineImage,
-            securityGroup: this._securityGroup,
-            role: this._role,
-            userData: userData,
-            ... (this.props.keyName && { keyName: this.props.keyName }),
-            keyPair: this.props.keyPair,
-          }),
+          launchTemplate,
           ... ( this.props.asgUpdatePolicy && { updatePolicy: this.props.asgUpdatePolicy } ),
         },
       );
+
+      // Convert to spot instances if requested
+      if (this.props.useSpotInstances) {
+        const cfnAsg = autoScalingGroup.node.defaultChild as autoscaling.CfnAutoScalingGroup;
+
+        // Remove the launch template property as it conflicts with mixed instances policy
+        cfnAsg.addPropertyDeletionOverride('LaunchTemplate');
+
+        // Configure mixed instances policy for spot instances
+        const allocationStrategy = this.props.spotAllocationStrategy ?? 'capacity-optimized';
+
+        cfnAsg.mixedInstancesPolicy = {
+          launchTemplate: {
+            launchTemplateSpecification: {
+              launchTemplateId: launchTemplate.launchTemplateId,
+              version: launchTemplate.versionNumber,
+            },
+            overrides: [{
+              instanceType: this.props.instanceType.toString(),
+            }],
+          },
+          instancesDistribution: {
+            onDemandPercentageAboveBaseCapacity: 0, // 100% spot instances
+            spotAllocationStrategy: allocationStrategy,
+            ...(this.props.spotMaxPrice && { spotMaxPrice: this.props.spotMaxPrice }),
+          },
+        };
+      }
+
       this._autoScalingGroups.push(autoScalingGroup);
       // NAT instance routes all traffic, both ways
       this.gateways.add(sub.availabilityZone, networkInterface);
